@@ -54,10 +54,11 @@ const state = {
 
 let mainChart;
 
+// ========== DASHBOARD FUNCTIONS ==========
+
 function renderMetrics() {
   const metrics = state.mode === 'demo' ? demoMetrics : liveMetrics;
   const el = document.getElementById('metricsGrid');
-
   if (!el) return;
 
   el.innerHTML = metrics.map(item => `
@@ -183,11 +184,286 @@ function bindControls() {
   });
 }
 
+// ========== LEAD CAPTURE & FORMS ==========
+
+class LeadManager {
+  constructor() {
+    this.storageKey = 'blockchain_monitor_pro_leads';
+    this.loadLeads();
+  }
+
+  loadLeads() {
+    try {
+      const stored = localStorage.getItem(this.storageKey);
+      this.leads = stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      this.leads = [];
+    }
+  }
+
+  saveLead(data) {
+    const lead = {
+      id: Date.now().toString(),
+      ...data,
+      source: this.detectSource(),
+      createdAt: new Date().toISOString(),
+      read: false
+    };
+
+    this.leads.unshift(lead);
+    localStorage.setItem(this.storageKey, JSON.stringify(this.leads.slice(0, 500)));
+    return lead;
+  }
+
+  detectSource() {
+    return window.location.pathname.includes('dashboard') ? 'dashboard' : 'landing';
+  }
+
+  getAllLeads() {
+    return this.leads;
+  }
+
+  exportAsJSON() {
+    return JSON.stringify(this.leads, null, 2);
+  }
+
+  exportAsCSV() {
+    if (!this.leads.length) return '';
+
+    const headers = Object.keys(this.leads[0]).join(',');
+    const rows = this.leads.map(lead =>
+      Object.values(lead)
+        .map(v => `"${String(v).replace(/"/g, '""')}"`)
+        .join(',')
+    );
+
+    return [headers, ...rows].join('\n');
+  }
+}
+
+const leadManager = new LeadManager();
+
+function showNotification(message, type = 'success') {
+  const existing = document.getElementById('notification');
+  if (existing) existing.remove();
+
+  const notification = document.createElement('div');
+  notification.id = 'notification';
+  notification.className = `notification ${type}`;
+  notification.innerHTML = `
+    <div class="notification-inner">
+      <i class="fa-solid ${type === 'success' ? 'fa-circle-check' : type === 'error' ? 'fa-circle-exclamation' : 'fa-info-circle'}"></i>
+      <span>${message}</span>
+    </div>
+  `;
+
+  document.body.appendChild(notification);
+  setTimeout(() => notification.remove(), 5000);
+}
+
+function initDemoForm() {
+  const form = document.getElementById('demoForm');
+  if (!form) return;
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData);
+
+    if (!data.email || !data.name || !data.company) {
+      showNotification('Please fill in all required fields', 'error');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+      showNotification('Please enter a valid email address', 'error');
+      return;
+    }
+
+    const lead = leadManager.saveLead(data);
+
+    // Show success message
+    showNotification(`Demo request received! We'll contact ${data.email} shortly.`, 'success');
+
+    // Reset form
+    form.reset();
+
+    // Log lead for admin reference
+    console.log('📊 New Lead Captured:', lead);
+  });
+}
+
+function initContactForm() {
+  const form = document.getElementById('contactForm');
+  if (!form) return;
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData);
+
+    if (!data.email || !data.message) {
+      showNotification('Please fill in all fields', 'error');
+      return;
+    }
+
+    const lead = leadManager.saveLead({
+      ...data,
+      type: 'contact'
+    });
+
+    showNotification('Message received! We\'ll get back to you soon.', 'success');
+    form.reset();
+    console.log('💬 New Contact:', lead);
+  });
+}
+
+function initPricingCTA() {
+  const buttons = document.querySelectorAll('[data-plan]');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const plan = btn.dataset.plan;
+      const email = prompt(`Enter your email to get started with ${plan} plan:`);
+
+      if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        const lead = leadManager.saveLead({
+          email,
+          plan,
+          type: 'pricing'
+        });
+
+        showNotification(`Great! We'll send ${plan} details to ${email}`, 'success');
+        console.log('💳 Pricing Lead:', lead);
+      } else if (email) {
+        showNotification('Please enter a valid email', 'error');
+      }
+    });
+  });
+}
+
+// ========== ADMIN PANEL ==========
+
+function initAdminPanel() {
+  const adminBtn = document.getElementById('adminPanelBtn');
+  const adminPanel = document.getElementById('adminPanel');
+  const adminCode = 'admin2026';
+
+  if (!adminBtn || !adminPanel) return;
+
+  adminBtn.addEventListener('click', () => {
+    const password = prompt('Admin password:');
+    if (password === adminCode) {
+      renderAdminPanel();
+      adminPanel.classList.add('active');
+    } else if (password) {
+      alert('Incorrect password');
+    }
+  });
+
+  // Close admin panel
+  document.addEventListener('click', (e) => {
+    if (adminPanel.classList.contains('active') && !adminPanel.contains(e.target) && e.target !== adminBtn) {
+      adminPanel.classList.remove('active');
+    }
+  });
+}
+
+function renderAdminPanel() {
+  const leads = leadManager.getAllLeads();
+  const leadsHtml = leads.slice(0, 10).map(lead => `
+    <div class="admin-lead-item">
+      <strong>${lead.name || lead.email}</strong><br>
+      <small>${lead.email}</small><br>
+      <small style="color: #94a3b8;">${new Date(lead.createdAt).toLocaleString()} · ${lead.type || 'demo'}</small>
+    </div>
+  `).join('');
+
+  const html = `
+    <div class="admin-header">
+      <h3>📊 Admin Panel</h3>
+      <button id="closeAdminBtn" style="background:0;border:0;color:#60a5fa;cursor:pointer;font-size:1.5rem;">×</button>
+    </div>
+
+    <div class="admin-stats">
+      <div class="stat"><strong>${leads.length}</strong><br><small>Total Leads</small></div>
+      <div class="stat"><strong>${leads.filter(l => l.type === 'demo').length}</strong><br><small>Demo Requests</small></div>
+      <div class="stat"><strong>${leads.filter(l => l.type === 'contact').length}</strong><br><small>Contacts</small></div>
+    </div>
+
+    <div class="admin-section">
+      <h4>Recent Leads</h4>
+      ${leadsHtml || '<p style="color: #94a3b8;">No leads yet</p>'}
+    </div>
+
+    <div class="admin-actions">
+      <button id="downloadJsonBtn" class="btn btn-primary">Export JSON</button>
+      <button id="downloadCsvBtn" class="btn btn-ghost">Export CSV</button>
+      <button id="clearLeadsBtn" class="btn btn-ghost">Clear All</button>
+    </div>
+  `;
+
+  const adminPanel = document.getElementById('adminPanel');
+  adminPanel.innerHTML = html;
+
+  // Event handlers
+  document.getElementById('closeAdminBtn').addEventListener('click', () => {
+    adminPanel.classList.remove('active');
+  });
+
+  document.getElementById('downloadJsonBtn').addEventListener('click', () => {
+    const json = leadManager.exportAsJSON();
+    downloadFile(json, 'blockchain-monitor-leads.json', 'application/json');
+  });
+
+  document.getElementById('downloadCsvBtn').addEventListener('click', () => {
+    const csv = leadManager.exportAsCSV();
+    downloadFile(csv, 'blockchain-monitor-leads.csv', 'text/csv');
+  });
+
+  document.getElementById('clearLeadsBtn').addEventListener('click', () => {
+    if (confirm('Are you sure? This cannot be undone.')) {
+      localStorage.removeItem(leadManager.storageKey);
+      leadManager.leads = [];
+      showNotification('All leads cleared', 'success');
+      renderAdminPanel();
+    }
+  });
+}
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ========== INITIALIZATION ==========
+
 window.addEventListener('DOMContentLoaded', () => {
+  // Dashboard
   renderMetrics();
   renderSignals();
   renderAlerts();
   renderTxTable();
   renderChart();
   bindControls();
+
+  // Forms
+  initDemoForm();
+  initContactForm();
+  initPricingCTA();
+
+  // Admin
+  initAdminPanel();
+
+  // Log ready state
+  console.log('✅ Blockchain Monitor Pro loaded successfully');
+  console.log('📊 Leads stored:', leadManager.getAllLeads().length);
 });
