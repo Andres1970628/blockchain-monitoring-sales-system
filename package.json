@@ -1,13 +1,29 @@
 {
   "name": "blockchain-monitoring-sales-system",
   "version": "1.0.0",
-  "description": "Blockchain Monitor Pro SaaS landing page and demo dashboard with lead capture backend.",
+  "description": "Blockchain Monitor Pro - SaaS with Stripe payments and PostgreSQL backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "nodemon server.js",
+    "prisma:setup": "npx prisma migrate dev --name init",
+    "prisma:push": "npx prisma db push",
+    "prisma:studio": "npx prisma studio"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "@prisma/client": "^5.7.0",
+    "stripe": "^14.21.0",
+    "resend": "^3.0.0",
+    "axios": "^1.6.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "prisma": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
