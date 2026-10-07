@@ -362,4 +362,159 @@ function initDemoForm() {
 
     leadManager.saveLead(data);
     showNotification(`Demo request received! We'll contact ${data.email} shortly.`, 'success');
-    form
+    form.reset();
+  });
+}
+
+function initContactForm() {
+  const form = document.getElementById('contactForm');
+  if (!form) return;
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData);
+
+    if (!data.email || !data.message) {
+      showNotification('Please fill in all fields', 'error');
+      return;
+    }
+
+    leadManager.saveLead({ ...data, type: 'contact' });
+    showNotification('Message received! We\'ll get back to you soon.', 'success');
+    form.reset();
+  });
+}
+
+function initPricingCTA() {
+  const buttons = document.querySelectorAll('[data-plan]');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const plan = btn.dataset.plan;
+      const email = prompt(`Enter your email to get started with ${plan} plan:`);
+
+      if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        leadManager.saveLead({ email, plan, type: 'pricing' });
+        showNotification(`Great! We'll send ${plan} details to ${email}`, 'success');
+      } else if (email) {
+        showNotification('Please enter a valid email', 'error');
+      }
+    });
+  });
+}
+
+// ========== ADMIN PANEL ==========
+
+function initAdminPanel() {
+  const adminBtn = document.getElementById('adminPanelBtn');
+  const adminPanel = document.getElementById('adminPanel');
+  const adminCode = 'admin2026';
+
+  if (!adminBtn || !adminPanel) return;
+
+  adminBtn.addEventListener('click', () => {
+    const password = prompt('Admin password:');
+    if (password === adminCode) {
+      renderAdminPanel();
+      adminPanel.classList.add('active');
+    } else if (password) {
+      alert('Incorrect password');
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (adminPanel.classList.contains('active') && !adminPanel.contains(e.target) && e.target !== adminBtn) {
+      adminPanel.classList.remove('active');
+    }
+  });
+}
+
+function renderAdminPanel() {
+  const leads = leadManager.getAllLeads();
+  const leadsHtml = leads.slice(0, 10).map(lead => `
+    <div class="admin-lead-item">
+      <strong>${lead.name || lead.email}</strong><br>
+      <small>${lead.email}</small><br>
+      <small style="color: #94a3b8;">${new Date(lead.createdAt).toLocaleString()} · ${lead.type || 'demo'}</small>
+    </div>
+  `).join('');
+
+  const html = `
+    <div class="admin-header">
+      <h3>📊 Admin Panel & Threat Intel</h3>
+      <button id="closeAdminBtn" style="background:0;border:0;color:#60a5fa;cursor:pointer;font-size:1.5rem;">×</button>
+    </div>
+
+    <div class="admin-stats">
+      <div class="stat"><strong>${leads.length}</strong><br><small>Total Leads</small></div>
+      <div class="stat"><strong>${Object.keys(scammerIntelligence).length}</strong><br><small>Flagged Entities</small></div>
+      <div class="stat"><strong>${leads.filter(l => l.type === 'demo').length}</strong><br><small>Demo Requests</small></div>
+    </div>
+
+    <div class="admin-section">
+      <h4>Recent Leads</h4>
+      ${leadsHtml || '<p style="color: #94a3b8;">No leads yet</p>'}
+    </div>
+
+    <div class="admin-actions">
+      <button id="downloadJsonBtn" class="btn btn-primary">Export JSON</button>
+      <button id="downloadCsvBtn" class="btn btn-ghost">Export CSV</button>
+      <button id="clearLeadsBtn" class="btn btn-ghost">Clear All</button>
+    </div>
+  `;
+
+  const adminPanel = document.getElementById('adminPanel');
+  adminPanel.innerHTML = html;
+
+  document.getElementById('closeAdminBtn').addEventListener('click', () => {
+    adminPanel.classList.remove('active');
+  });
+
+  document.getElementById('downloadJsonBtn').addEventListener('click', () => {
+    downloadFile(leadManager.exportAsJSON(), 'blockchain-monitor-leads.json', 'application/json');
+  });
+
+  document.getElementById('downloadCsvBtn').addEventListener('click', () => {
+    downloadFile(leadManager.exportAsCSV(), 'blockchain-monitor-leads.csv', 'text/csv');
+  });
+
+  document.getElementById('clearLeadsBtn').addEventListener('click', () => {
+    if (confirm('Are you sure? This cannot be undone.')) {
+      localStorage.removeItem(leadManager.storageKey);
+      leadManager.leads = [];
+      showNotification('All leads cleared', 'success');
+      renderAdminPanel();
+    }
+  });
+}
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ========== INITIALIZATION ==========
+
+window.addEventListener('DOMContentLoaded', () => {
+  renderMetrics();
+  renderSignals();
+  renderAlerts();
+  renderTxTable();
+  renderScammerIntelPanel();
+  renderChart();
+  bindControls();
+
+  initDemoForm();
+  initContactForm();
+  initPricingCTA();
+  initAdminPanel();
+
+  console.log('✅ Blockchain Monitor Pro & Indirect Exposure Tracking loaded successfully');
+});
