@@ -34,11 +34,40 @@ const txData = [
   { net: 'Solana', hash: '0x88ac...23d9', type: 'Transfer', amount: '$3,850', fee: '$0.29', status: 'Confirmed' }
 ];
 
+// Base de Inteligencia y Atribución de Scammers + Análisis de Exposición Indirecta (Taint & CEX)
+const scammerIntelligence = {
+  '0xc44b...ef09': { 
+    entityName: 'Drainer Syndicate Alpha', 
+    actorAlias: 'PhishMaster_99 / Cluster X', 
+    riskLevel: 'Critical', 
+    multiHopNodes: 5,
+    taintRatio: '24.5%', 
+    cexExposure: 'Binance (Deposit Address #402)',
+    notes: 'Fondos divididos en 5 carteras intermediarias. Criterio legal habilitado para congelamiento en CEX.' 
+  },
+  '0x7a2d...bb4d': { 
+    entityName: 'Rugpull Ops / Fake Staking', 
+    actorAlias: 'SolanaDrainer Team B', 
+    riskLevel: 'High', 
+    multiHopNodes: 2,
+    taintRatio: '12.0%', 
+    cexExposure: 'OKX (P2P Settlement Node)',
+    notes: 'Patrón de blanqueo a través de mezcladores y cuentas P2P secundarias.' 
+  }
+};
+
 const chartSeries = {
   '1H': [16, 22, 18, 28, 34, 36, 42, 48, 52, 58, 64, 70],
   '24H': [10, 16, 18, 25, 31, 36, 40, 45, 48, 56, 63, 78],
   '7D': [8, 14, 18, 22, 30, 36, 42, 46, 54, 60, 70, 82],
   '30D': [5, 9, 13, 18, 22, 29, 34, 41, 48, 57, 69, 84]
+};
+
+const chartLabelsMap = {
+  '1H': ['-55m', '-50m', '-45m', '-40m', '-35m', '-30m', '-25m', '-20m', '-15m', '-10m', '-5m', 'Now'],
+  '24H': ['02:00', '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00', '00:00'],
+  '7D': ['Day 1', 'Day 1.5', 'Day 2', 'Day 2.5', 'Day 3', 'Day 3.5', 'Day 4', 'Day 4.5', 'Day 5', 'Day 6', 'Day 6.5', 'Day 7'],
+  '30D': ['Week 1', 'W1.5', 'Week 2', 'W2.5', 'Week 3', 'W3.5', 'Week 4', 'W4.5', 'Week 5', 'W5.5', 'Week 6', 'Month End']
 };
 
 const statusMap = {
@@ -107,15 +136,50 @@ function renderTxTable() {
   const el = document.getElementById('txTable');
   if (!el) return;
 
-  el.innerHTML = txData.map(row => `
-    <tr>
-      <td><span class="network-tag">${row.net}</span></td>
-      <td class="tx-hash">${row.hash}</td>
-      <td>${row.type}</td>
-      <td>${row.amount}</td>
-      <td>${row.fee}</td>
-      <td><span class="status-tag ${statusMap[row.status] || 'confirmed'}">${row.status}</span></td>
-    </tr>
+  el.innerHTML = txData.map(row => {
+    const threat = scammerIntelligence[row.hash];
+    const threatBadge = threat ? `<span class="status-tag failed" title="${threat.entityName}: ${threat.actorAlias} (Taint: ${threat.taintRatio})" style="cursor: pointer; margin-left: 6px;"><i class="fa-solid fa-user-secret"></i> ${threat.entityName}</span>` : '';
+    
+    return `
+      <tr>
+        <td><span class="network-tag">${row.net}</span></td>
+        <td class="tx-hash">${row.hash} ${threatBadge}</td>
+        <td>${row.type}</td>
+        <td>${row.amount}</td>
+        <td>${row.fee}</td>
+        <td><span class="status-tag ${statusMap[row.status] || 'confirmed'}">${row.status}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Panel forense de exposición indirecta, multi-hop, taint analysis y CEX freeze
+function renderScammerIntelPanel() {
+  const el = document.getElementById('scammerIntelPanel');
+  if (!el) return;
+
+  const entries = Object.entries(scammerIntelligence);
+  el.innerHTML = entries.map(([hash, data]) => `
+    <div class="alert-item error" style="margin-bottom: 12px; padding: 14px; border-radius: 8px; background: rgba(239, 68, 68, 0.08);">
+      <div class="alert-icon"><i class="fa-solid fa-user-secret" style="font-size: 1.2rem;"></i></div>
+      <div class="alert-content" style="width: 100%;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <strong style="font-size: 1rem; color: #f8fafc;">Entity: ${data.entityName}</strong>
+          <span class="status-tag failed" style="font-size: 0.75rem;">Risk: ${data.riskLevel}</span>
+        </div>
+        <p style="margin: 4px 0; font-size: 0.88rem; color: #cbd5e1;">
+          <strong>Attribution Alias:</strong> ${data.actorAlias}
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(148, 163, 184, 0.15); font-size: 0.82rem; color: #94a3b8;">
+          <div><i class="fa-solid fa-code-fork"></i> Multi-Hop: <strong>${data.multiHopNodes} intermeds</strong></div>
+          <div><i class="fa-solid fa-percent"></i> Taint Ratio: <strong style="color: #f87171;">${data.taintRatio}</strong></div>
+          <div><i class="fa-solid fa-building-columns"></i> CEX Exposure: <strong style="color: #60a5fa;">${data.cexExposure}</strong></div>
+        </div>
+        <div style="margin-top: 6px; font-size: 0.78rem; color: #64748b;">
+          Tx Hash clave: ${hash} — <em>${data.notes}</em>
+        </div>
+      </div>
+    </div>
   `).join('');
 }
 
@@ -123,25 +187,33 @@ function renderChart() {
   const el = document.getElementById('mainChart');
   if (!el) return;
 
-  const labels = ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'];
+  const ctx = el.getContext('2d');
+  const labels = chartLabelsMap[state.range] || chartLabelsMap['1H'];
   const data = chartSeries[state.range] || chartSeries['1H'];
 
   if (mainChart) mainChart.destroy();
+
+  const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+  gradient.addColorStop(0, 'rgba(96, 165, 250, 0.35)');
+  gradient.addColorStop(1, 'rgba(96, 165, 250, 0.0)');
 
   mainChart = new Chart(el, {
     type: 'line',
     data: {
       labels,
       datasets: [{
-        label: 'Flow',
+        label: 'Flow volume',
         data,
         borderColor: '#60a5fa',
-        backgroundColor: 'rgba(96, 165, 250, 0.12)',
-        borderWidth: 2,
+        backgroundColor: gradient,
+        borderWidth: 2.5,
         fill: true,
         tension: 0.42,
         pointRadius: 0,
-        pointHoverRadius: 4
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: '#60a5fa',
+        pointHoverBorderColor: '#ffffff',
+        pointHoverBorderWidth: 2
       }]
     },
     options: {
@@ -151,16 +223,26 @@ function renderChart() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: 'rgba(9, 12, 24, 0.96)',
-          borderColor: 'rgba(148,163,184,0.18)',
+          backgroundColor: 'rgba(9, 12, 24, 0.94)',
+          borderColor: 'rgba(148, 163, 184, 0.2)',
           borderWidth: 1,
-          titleColor: '#e2e8f0',
-          bodyColor: '#cbd5e1'
+          padding: 12,
+          titleColor: '#f8fafc',
+          bodyColor: '#94a3b8',
+          cornerRadius: 8,
+          callbacks: {
+            label: function(context) {
+              return ` Flow: $${context.parsed.y}M`;
+            }
+          }
         }
       },
       scales: {
-        x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
-        y: { grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { color: '#94a3b8' } }
+        x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 11 } } },
+        y: { 
+          grid: { color: 'rgba(148, 163, 184, 0.08)', borderDash: [4, 4] }, 
+          ticks: { color: '#94a3b8', font: { size: 11 }, callback: value => '$' + value + 'M' } 
+        }
       }
     }
   });
@@ -229,14 +311,12 @@ class LeadManager {
 
   exportAsCSV() {
     if (!this.leads.length) return '';
-
     const headers = Object.keys(this.leads[0]).join(',');
     const rows = this.leads.map(lead =>
       Object.values(lead)
         .map(v => `"${String(v).replace(/"/g, '""')}"`)
         .join(',')
     );
-
     return [headers, ...rows].join('\n');
   }
 }
@@ -267,7 +347,6 @@ function initDemoForm() {
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-
     const formData = new FormData(form);
     const data = Object.fromEntries(formData);
 
@@ -281,189 +360,6 @@ function initDemoForm() {
       return;
     }
 
-    const lead = leadManager.saveLead(data);
-
-    // Show success message
+    leadManager.saveLead(data);
     showNotification(`Demo request received! We'll contact ${data.email} shortly.`, 'success');
-
-    // Reset form
-    form.reset();
-
-    // Log lead for admin reference
-    console.log('📊 New Lead Captured:', lead);
-  });
-}
-
-function initContactForm() {
-  const form = document.getElementById('contactForm');
-  if (!form) return;
-
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-
-    const formData = new FormData(form);
-    const data = Object.fromEntries(formData);
-
-    if (!data.email || !data.message) {
-      showNotification('Please fill in all fields', 'error');
-      return;
-    }
-
-    const lead = leadManager.saveLead({
-      ...data,
-      type: 'contact'
-    });
-
-    showNotification('Message received! We\'ll get back to you soon.', 'success');
-    form.reset();
-    console.log('💬 New Contact:', lead);
-  });
-}
-
-function initPricingCTA() {
-  const buttons = document.querySelectorAll('[data-plan]');
-  buttons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const plan = btn.dataset.plan;
-      const email = prompt(`Enter your email to get started with ${plan} plan:`);
-
-      if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        const lead = leadManager.saveLead({
-          email,
-          plan,
-          type: 'pricing'
-        });
-
-        showNotification(`Great! We'll send ${plan} details to ${email}`, 'success');
-        console.log('💳 Pricing Lead:', lead);
-      } else if (email) {
-        showNotification('Please enter a valid email', 'error');
-      }
-    });
-  });
-}
-
-// ========== ADMIN PANEL ==========
-
-function initAdminPanel() {
-  const adminBtn = document.getElementById('adminPanelBtn');
-  const adminPanel = document.getElementById('adminPanel');
-  const adminCode = 'admin2026';
-
-  if (!adminBtn || !adminPanel) return;
-
-  adminBtn.addEventListener('click', () => {
-    const password = prompt('Admin password:');
-    if (password === adminCode) {
-      renderAdminPanel();
-      adminPanel.classList.add('active');
-    } else if (password) {
-      alert('Incorrect password');
-    }
-  });
-
-  // Close admin panel
-  document.addEventListener('click', (e) => {
-    if (adminPanel.classList.contains('active') && !adminPanel.contains(e.target) && e.target !== adminBtn) {
-      adminPanel.classList.remove('active');
-    }
-  });
-}
-
-function renderAdminPanel() {
-  const leads = leadManager.getAllLeads();
-  const leadsHtml = leads.slice(0, 10).map(lead => `
-    <div class="admin-lead-item">
-      <strong>${lead.name || lead.email}</strong><br>
-      <small>${lead.email}</small><br>
-      <small style="color: #94a3b8;">${new Date(lead.createdAt).toLocaleString()} · ${lead.type || 'demo'}</small>
-    </div>
-  `).join('');
-
-  const html = `
-    <div class="admin-header">
-      <h3>📊 Admin Panel</h3>
-      <button id="closeAdminBtn" style="background:0;border:0;color:#60a5fa;cursor:pointer;font-size:1.5rem;">×</button>
-    </div>
-
-    <div class="admin-stats">
-      <div class="stat"><strong>${leads.length}</strong><br><small>Total Leads</small></div>
-      <div class="stat"><strong>${leads.filter(l => l.type === 'demo').length}</strong><br><small>Demo Requests</small></div>
-      <div class="stat"><strong>${leads.filter(l => l.type === 'contact').length}</strong><br><small>Contacts</small></div>
-    </div>
-
-    <div class="admin-section">
-      <h4>Recent Leads</h4>
-      ${leadsHtml || '<p style="color: #94a3b8;">No leads yet</p>'}
-    </div>
-
-    <div class="admin-actions">
-      <button id="downloadJsonBtn" class="btn btn-primary">Export JSON</button>
-      <button id="downloadCsvBtn" class="btn btn-ghost">Export CSV</button>
-      <button id="clearLeadsBtn" class="btn btn-ghost">Clear All</button>
-    </div>
-  `;
-
-  const adminPanel = document.getElementById('adminPanel');
-  adminPanel.innerHTML = html;
-
-  // Event handlers
-  document.getElementById('closeAdminBtn').addEventListener('click', () => {
-    adminPanel.classList.remove('active');
-  });
-
-  document.getElementById('downloadJsonBtn').addEventListener('click', () => {
-    const json = leadManager.exportAsJSON();
-    downloadFile(json, 'blockchain-monitor-leads.json', 'application/json');
-  });
-
-  document.getElementById('downloadCsvBtn').addEventListener('click', () => {
-    const csv = leadManager.exportAsCSV();
-    downloadFile(csv, 'blockchain-monitor-leads.csv', 'text/csv');
-  });
-
-  document.getElementById('clearLeadsBtn').addEventListener('click', () => {
-    if (confirm('Are you sure? This cannot be undone.')) {
-      localStorage.removeItem(leadManager.storageKey);
-      leadManager.leads = [];
-      showNotification('All leads cleared', 'success');
-      renderAdminPanel();
-    }
-  });
-}
-
-function downloadFile(content, filename, mimeType) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-// ========== INITIALIZATION ==========
-
-window.addEventListener('DOMContentLoaded', () => {
-  // Dashboard
-  renderMetrics();
-  renderSignals();
-  renderAlerts();
-  renderTxTable();
-  renderChart();
-  bindControls();
-
-  // Forms
-  initDemoForm();
-  initContactForm();
-  initPricingCTA();
-
-  // Admin
-  initAdminPanel();
-
-  // Log ready state
-  console.log('✅ Blockchain Monitor Pro loaded successfully');
-  console.log('📊 Leads stored:', leadManager.getAllLeads().length);
-});
+    form
